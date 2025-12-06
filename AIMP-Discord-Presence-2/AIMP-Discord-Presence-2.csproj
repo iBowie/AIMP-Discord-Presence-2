@@ -50,18 +50,18 @@
     <ErrorReport>prompt</ErrorReport>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="AIMP.SDK, Version=5.3.2394.4, Culture=neutral, processorArchitecture=x86">
-      <HintPath>..\packages\AimpSDK.5.3.2394.4\lib\net48\AIMP.SDK.dll</HintPath>
+    <Reference Include="AIMP.SDK, Version=5.3.2394.5, Culture=neutral, processorArchitecture=x86">
+      <HintPath>..\packages\AimpSDK.5.3.2394.5\lib\net48\AIMP.SDK.dll</HintPath>
     </Reference>
     <Reference Include="aimp_dotnet, Version=0.0.0.0, Culture=neutral, processorArchitecture=x86">
-      <HintPath>..\packages\AimpSDK.5.3.2394.4\lib\net48\aimp_dotnet.dll</HintPath>
+      <HintPath>..\packages\AimpSDK.5.3.2394.5\lib\net48\aimp_dotnet.dll</HintPath>
     </Reference>
     <Reference Include="DiscordRPC, Version=1.2.1.24, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\libs\DiscordRPC.dll</HintPath>
     </Reference>
     <Reference Include="Newtonsoft.Json, Version=13.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
-      <HintPath>..\packages\Newtonsoft.Json.13.0.3\lib\net45\Newtonsoft.Json.dll</HintPath>
+      <HintPath>..\packages\Newtonsoft.Json.13.0.4\lib\net45\Newtonsoft.Json.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
