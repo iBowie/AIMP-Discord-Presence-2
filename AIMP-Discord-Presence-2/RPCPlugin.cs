@@ -1,0 +1,236 @@
+﻿using AIMP.SDK;
+using AIMP.SDK.FileManager.Objects;
+using AIMP_Discord_Presence_2.Config;
+using AIMP_Discord_Presence_2.Hooks;
+using AIMP_Discord_Presence_2.Services;
+using DiscordRPC;
+using System;
+using System.IO;
+using System.Net;
+using System.Threading;
+using System.Xml;
+using System.Xml.Serialization;
+
+namespace AIMP_Discord_Presence_2
+{
+	[AimpPlugin("Discord Rich Presence 2", "BowieD", "0.0.1", AimpPluginType = AimpPluginType.Addons)]
+	public class RPCPlugin : AimpPlugin
+	{
+		public PluginConfiguration Configuration { get; private set; } = new PluginConfiguration();
+
+		private Timer _timer;
+		private DiscordRpcClient _rpcClient;
+		private RichPresence _presence;
+		private TrackChangedHook _hook;
+		private IAlbumArtService _albumArtService;
+		private readonly XmlSerializer _configSerializer = new XmlSerializer(typeof(PluginConfiguration));
+
+		private void LoadConfig()
+		{
+			Configuration.LoadDefaults();
+
+			var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+
+			var dir = Path.Combine(appData, "BowieD_AIMPDiscordPresence2");
+
+			var path = Path.Combine(dir, "config.xml");
+
+			if (File.Exists(path))
+			{
+				try
+				{
+					using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+					using (XmlReader reader = XmlReader.Create(fs))
+					{
+						Configuration = _configSerializer.Deserialize(reader) as PluginConfiguration;
+					}
+
+					if (Configuration is null)
+					{
+						Configuration = new PluginConfiguration();
+						Configuration.LoadDefaults();
+					}
+
+					Configuration.SanityCheck();
+				}
+				catch
+				{
+					Configuration.LoadDefaults();
+				}
+			}
+			else
+			{
+				if (!Directory.Exists(dir))
+					Directory.CreateDirectory(dir);
+
+				using (FileStream fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read))
+				using (XmlWriter writer = XmlWriter.Create(fs))
+				{
+					_configSerializer.Serialize(writer, Configuration);
+				}
+			}
+		}
+
+		public override void Initialize()
+		{
+			LoadConfig();
+
+			switch (Configuration.albumArtProvider)
+			{
+				case EAlbumArtProvider.Imgur when !string.IsNullOrWhiteSpace(Configuration.imgurClientId):
+					_albumArtService = new ImgurAlbumArtService(Configuration.imgurClientId, Configuration.maxCacheCount, Configuration.automaticallyDeleteOnPluginShutdown, Configuration.automaticallyDeleteOnSongSwitch, Configuration.retryCount, Configuration.retryDelayMs);
+					break;
+				case EAlbumArtProvider.Discord:
+					_albumArtService = new DiscordAlbumArtService();
+					break;
+				case EAlbumArtProvider.MusicBrainz when !string.IsNullOrWhiteSpace(Configuration.musicBrainzUserAgent):
+					_albumArtService = new MusicBrainzAlbumArtService(Configuration.musicBrainzUserAgent);
+					break;
+				default:
+					_albumArtService = new PlaceholderAlbumArtService();
+					break;
+			}
+
+			_rpcClient = new DiscordRpcClient(Configuration.discordApplicationId, autoEvents: true);
+			_rpcClient.Initialize();
+			_rpcClient.SetPresence(_presence);
+
+			_timer = new Timer(OnTimerCallback, null, TimeSpan.Zero, TimeSpan.FromSeconds(Configuration.updateFrequency));
+
+			_hook = new TrackChangedHook(this);
+			Player.ServiceMessageDispatcher.Hook(_hook);
+		}
+
+		private void OnTimerCallback(object state)
+		{
+			try
+			{
+				var plrSrv = this.Player.ServicePlayer;
+
+				UpdateTrackInfo(plrSrv.CurrentFileInfo);
+			}
+			catch { }
+		}
+
+		public override void Dispose()
+		{
+			if (!(_hook is null))
+				Player.ServiceMessageDispatcher.Unhook(_hook);
+			_hook = null;
+			_timer?.Dispose();
+			_timer = null;
+			_rpcClient?.Deinitialize();
+			_rpcClient?.Dispose();
+			_rpcClient = null;
+			_presence = null;
+			_albumArtService?.Dispose();
+			_albumArtService = null;
+		}
+
+		public void UpdateTrackInfo()
+		{
+			this.UpdateTrackInfo(this.Player.ServicePlayer.CurrentFileInfo);
+		}
+		private string GetSearchQuery(IAimpFileInfo aimpFile)
+		{
+			string query = $"\"{aimpFile.Title}\" by \"{aimpFile.Artist}\"";
+
+			return WebUtility.UrlEncode(query);
+		}
+		public void UpdateTrackInfo(IAimpFileInfo aimpFile)
+		{
+			_presence = new RichPresence()
+			{
+				Details = aimpFile.Title.Substring(0, Math.Min(aimpFile.Title.Length, 127)),
+				State = aimpFile.Artist.Substring(0, Math.Min(aimpFile.Artist.Length, 127)),
+				Assets = new Assets()
+				{
+					LargeImageKey = "aimp_logo",
+					LargeImageText = aimpFile.Album.Substring(0, Math.Min(aimpFile.Album.Length, 127)),
+				},
+				Timestamps = new Timestamps()
+				{
+
+				},
+				Type = ActivityType.Listening,
+			};
+
+			if (Configuration.displaySmallLogo)
+			{
+				_presence.Assets.SmallImageKey = "aimp_logo";
+				_presence.Assets.SmallImageText = "AIMP";
+			}
+
+			var plrSrv = this.Player.ServicePlayer;
+
+			if (plrSrv.State != AimpPlayerState.Stopped)
+			{
+				if (plrSrv.State == AimpPlayerState.Playing)
+				{
+					double duration = plrSrv.Duration;
+
+					if (duration != 0)
+					{
+						var pos = plrSrv.Position;
+
+						TimeSpan posTs = TimeSpan.FromSeconds(pos);
+						_presence.Timestamps.Start = DateTime.UtcNow.Subtract(posTs);
+						_presence.Timestamps.End = DateTime.UtcNow.AddSeconds(duration - pos);
+					}
+				}
+
+				var url = _albumArtService.TryGetImageUrl(aimpFile);
+				if (!string.IsNullOrWhiteSpace(url))
+				{
+					_presence.Assets.LargeImageKey = url;
+				}
+			}
+
+			if (plrSrv.State != AimpPlayerState.Playing)
+			{
+				_presence.Assets.SmallImageKey = "aimp_paused";
+			}
+
+			if (Configuration.addPresenceButtons)
+			{
+				string songSearchUrl = $"https://www.youtube.com/results?search_query={GetSearchQuery(aimpFile)}";
+
+				songSearchUrl = songSearchUrl.Substring(0, Math.Min(127, songSearchUrl.Length));
+
+				if (string.IsNullOrWhiteSpace(aimpFile.URL))
+				{
+					_presence.Buttons = new Button[1]
+					{
+						new Button()
+						{
+							Label = "Search on YouTube",
+							Url = songSearchUrl,
+						},
+					};
+				}
+				else
+				{
+					_presence.Buttons = new Button[2]
+					{
+						new Button()
+						{
+							Label = "Open Song URL",
+							Url = aimpFile.URL,
+						},
+						new Button()
+						{
+							Label = "Search on YouTube",
+							Url = songSearchUrl,
+						},
+					};
+				}
+			}
+			else
+			{
+				_presence.Buttons = Array.Empty<Button>();
+			}
+
+			_rpcClient.SetPresence(_presence);
+		}
+	}
+}
