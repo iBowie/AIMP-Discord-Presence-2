@@ -1,7 +1,6 @@
 ﻿using AIMP.SDK;
 using AIMP.SDK.FileManager.Objects;
 using AIMP_Discord_Presence_2.Config;
-using AIMP_Discord_Presence_2.Hooks;
 using AIMP_Discord_Presence_2.Services;
 using DiscordRPC;
 using System;
@@ -21,7 +20,6 @@ namespace AIMP_Discord_Presence_2
 		private Timer _timer;
 		private DiscordRpcClient _rpcClient;
 		private RichPresence _presence;
-		private TrackChangedHook _hook;
 		private IAlbumArtService _albumArtService;
 		private readonly XmlSerializer _configSerializer = new XmlSerializer(typeof(PluginConfiguration));
 
@@ -96,9 +94,6 @@ namespace AIMP_Discord_Presence_2
 			_rpcClient.SetPresence(_presence);
 
 			_timer = new Timer(OnTimerCallback, null, TimeSpan.Zero, TimeSpan.FromSeconds(Configuration.updateFrequency));
-
-			_hook = new TrackChangedHook(this);
-			Player.ServiceMessageDispatcher.Hook(_hook);
 		}
 
 		private void OnTimerCallback(object state)
@@ -114,9 +109,6 @@ namespace AIMP_Discord_Presence_2
 
 		public override void Dispose()
 		{
-			if (!(_hook is null))
-				Player.ServiceMessageDispatcher.Unhook(_hook);
-			_hook = null;
 			_timer?.Dispose();
 			_timer = null;
 			_rpcClient?.Deinitialize();
