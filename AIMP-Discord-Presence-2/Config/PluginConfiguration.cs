@@ -24,6 +24,9 @@ namespace AIMP_Discord_Presence_2.Config
 		// MusicBrainz
 		public string musicBrainzUserAgent;
 
+		// Static Website
+		public string staticWebsiteUrlFormat;
+
 		public void LoadDefaults()
 		{
 			discordApplicationId = "429559336982020107";
@@ -40,6 +43,8 @@ namespace AIMP_Discord_Presence_2.Config
 			maxCacheCount = 4;
 
 			musicBrainzUserAgent = "";
+
+			staticWebsiteUrlFormat = "";
 		}
 
 		public void SanityCheck()
@@ -57,5 +62,6 @@ namespace AIMP_Discord_Presence_2.Config
 		Imgur = 1,
 		Discord = 2,
 		MusicBrainz = 3,
+		StaticWebsite = 4,
 	}
 }

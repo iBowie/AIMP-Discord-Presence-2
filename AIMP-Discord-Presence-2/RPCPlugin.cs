@@ -12,7 +12,7 @@ using System.Xml.Serialization;
 
 namespace AIMP_Discord_Presence_2
 {
-	[AimpPlugin("Discord Rich Presence 2", "BowieD", "0.0.1", AimpPluginType = AimpPluginType.Addons)]
+	[AimpPlugin("Discord Rich Presence 2", "BowieD", "0.0.2", AimpPluginType = AimpPluginType.Addons)]
 	public class RPCPlugin : AimpPlugin
 	{
 		public PluginConfiguration Configuration { get; private set; } = new PluginConfiguration();
@@ -83,6 +83,9 @@ namespace AIMP_Discord_Presence_2
 					break;
 				case EAlbumArtProvider.MusicBrainz when !string.IsNullOrWhiteSpace(Configuration.musicBrainzUserAgent):
 					_albumArtService = new MusicBrainzAlbumArtService(Configuration.musicBrainzUserAgent);
+					break;
+				case EAlbumArtProvider.StaticWebsite:
+					_albumArtService = new StaticWebsiteAlbumArtService(Configuration.staticWebsiteUrlFormat);
 					break;
 				default:
 					_albumArtService = new PlaceholderAlbumArtService();
